@@ -162,7 +162,7 @@ describe('agentests-security', () => {
 			const result = runCli(['mock', '--disable', 'firewall'], { cwd: dir });
 			expect(result.exitCode).toBe(2);
 			expect(result.stderr).toBe(
-				'Error: Unknown defense: firewall; use rate-limit, quota, or detection\n'
+				'Error: Unknown defense: firewall; use rate-limit, quota, detection, account-rate-limit, cross-key-detection, intent-detection\n'
 			);
 		});
 	});

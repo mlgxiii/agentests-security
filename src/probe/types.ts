@@ -5,7 +5,9 @@ import { IdSchema, TextSchema } from './shared.ts';
 export const ScenarioSchema = z.enum([
 	'sustained-query-volume',
 	'systematic-query-pattern',
-	'quota-exhaustion'
+	'quota-exhaustion',
+	'paraphrased-extraction',
+	'legitimate-usage'
 ]);
 export type AgentTestScenario = z.infer<typeof ScenarioSchema>;
 
@@ -65,17 +67,27 @@ export const ExpectSchema = z
 		/** With `rate_limit_enforced: true`: the first rate-limited response must come by this request. */
 		rate_limit_within: z.number().int().min(1).optional(),
 		/** With `quota_enforced: true`: the first quota response must come by this request. */
-		quota_within: z.number().int().min(1).optional()
+		quota_within: z.number().int().min(1).optional(),
+		/** At least this share of requests was rejected by a rate limit or quota: the defense stops most of an attack. */
+		min_blocked_rate: z.number().min(0).max(1).optional(),
+		/** At most this share was rejected: legitimate traffic gets through. */
+		max_blocked_rate: z.number().min(0).max(1).optional(),
+		/** With `baseline`: this Test's blocked rate exceeds the baseline Test's by at least this much. */
+		min_blocked_rate_gain: z.number().min(0).max(1).optional()
 	})
 	.refine(
 		(value) =>
 			value.rate_limit_enforced !== undefined ||
 			value.quota_enforced !== undefined ||
-			value.detection_event !== undefined,
+			value.detection_event !== undefined ||
+			value.min_blocked_rate !== undefined ||
+			value.max_blocked_rate !== undefined ||
+			value.min_blocked_rate_gain !== undefined,
 		'Expected at least one expectation'
 	);
 export type AgentTestExpect = z.infer<typeof ExpectSchema>;
-export type AgentTestExpectation = 'rate_limit_enforced' | 'quota_enforced' | 'detection_event';
+export type AgentTestExpectation =
+	'rate_limit_enforced' | 'quota_enforced' | 'detection_event' | 'blocked_rate' | 'baseline_gain';
 
 /** One bounded attack simulation and its expectations; `duration_seconds` spreads the requests evenly, 0 sends them back to back. */
 export const SecurityTestSchema = z.strictObject({
@@ -86,6 +98,13 @@ export const SecurityTestSchema = z.strictObject({
 	duration_seconds: z.number().min(0).max(3_600).default(0),
 	/** Merged over the target's headers for this Test only, e.g. its own API key. */
 	headers: HeadersSchema.default({}),
+	/**
+	 * Header sets to rotate through, one per request in turn and merged over `headers`: a distributed attack
+	 * spread across several API keys or accounts. `{{key_index}}` is the 0-based index of the set in use.
+	 */
+	keys: z.array(HeadersSchema).min(1).max(100).optional(),
+	/** The id of an earlier Test, usually `legitimate-usage`, to compare blocked rates against; it runs first. */
+	baseline: IdSchema.optional(),
 	/** The largest share of responses that may be errors matching no signal before the Test is inconclusive, and fails. */
 	max_error_rate: z.number().min(0).max(1).default(0.05),
 	expect: ExpectSchema
@@ -126,6 +145,12 @@ export interface AgentTestSecurityEvidence {
 	succeededAfterQuota: number;
 	/** Non-2xx responses that match no signal, such as 500s: evidence about the target, not its defenses. */
 	errors: number;
+	/** How many header sets the requests were spread across: 1, or the length of `keys`. */
+	keys: number;
+	/** (rate-limited + quota-rejected) / sent, 0 when nothing was sent. */
+	blockedRate: number;
+	/** The baseline Test's `blockedRate`, when the Test has a `baseline`. */
+	baselineBlockedRate?: number;
 	/** New detection events seen during the scenario; absent without `target.detection`. */
 	detectionEvents?: number;
 	/** Whether `detectionEvents` counts only this run's events (`target.detection.run_field`); absent without detection. */

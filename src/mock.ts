@@ -10,18 +10,30 @@ export interface MockDefenses {
 	quota?: { requests: number };
 	/** One event when a key sends `threshold` prompts that are the same once digits are masked. */
 	detection?: { threshold: number };
+	/** At most `requests` across every key in each `windowMs` window: the account- or IP-wide limit that a key rotation hits. */
+	accountRateLimit?: { requests: number; windowMs: number };
+	/** One event when `threshold` prompts with one template arrive from at least `keys` different keys. */
+	crossKeyDetection?: { keys: number; threshold: number };
+	/** One event when a key sends `threshold` prompts asking for a label with a confidence, however they are worded. */
+	intentDetection?: { threshold: number };
 }
 
-/** The defenses of a correctly protected API: 20 requests a second, 60 in total, and a flag after 25 templated prompts. */
+/**
+ * The defenses of a correctly protected API: 20 requests a second per key and 50 across keys, 60 in total per key,
+ * and a flag after 25 templated prompts from one key, 25 of one template across 3 keys, or 25 label-and-confidence asks.
+ */
 export const PROTECTED_DEFENSES: Required<MockDefenses> = {
 	rateLimit: { requests: 20, windowMs: 1_000 },
 	quota: { requests: 60 },
-	detection: { threshold: 25 }
+	detection: { threshold: 25 },
+	accountRateLimit: { requests: 50, windowMs: 1_000 },
+	crossKeyDetection: { keys: 3, threshold: 25 },
+	intentDetection: { threshold: 25 }
 };
 
 /** One detection event, as `GET /v1/security/events` lists it. */
 export interface MockEvent {
-	type: 'systematic-query-pattern';
+	type: 'systematic-query-pattern' | 'distributed-query-pattern' | 'extraction-intent';
 	key: string;
 	template: string;
 	count: number;
@@ -41,7 +53,13 @@ interface KeyState {
 	used: number;
 	templates: Map<string, number>;
 	flagged: Set<string>;
+	intents: number;
 }
+
+/** A prompt that asks for a classification together with how confident it is: the core of a decision-boundary probe. */
+const isLabelProbe = (prompt: string): boolean =>
+	/\b(label|class|classify|category|bucket)\b/i.test(prompt) &&
+	/\b(confiden\w*|probabilit\w*|likely|certainty|score|sure)\b/i.test(prompt);
 
 /** Digits masked, so a grid of inputs collapses to its template. */
 const toTemplate = (prompt: string): string => prompt.replace(/\d+/g, '#');
@@ -91,6 +109,19 @@ export const startMockApi = async ({
 }: { port?: number; defenses?: MockDefenses; now?: () => number } = {}): Promise<MockApi> => {
 	const keys = new Map<string, KeyState>();
 	const events: MockEvent[] = [];
+	const account = { windowStart: now(), windowCount: 0 };
+	/** Every template across keys: how often it was sent, by which keys, and whether it was flagged. */
+	const shared = new Map<string, { count: number; keys: Set<string>; flagged: boolean }>();
+
+	const tooMany = (response: ServerResponse, start: number, windowMs: number): void => {
+		const retry = Math.ceil((start + windowMs - now()) / 1000);
+		json(
+			response,
+			429,
+			{ error: { code: 'rate_limit_exceeded', message: 'Too many requests.' } },
+			{ 'retry-after': String(Math.max(1, retry)) }
+		);
+	};
 
 	const complete = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
 		const body = await readBody(request);
@@ -102,47 +133,71 @@ export const startMockApi = async ({
 				windowCount: 0,
 				used: 0,
 				templates: new Map(),
-				flagged: new Set()
+				flagged: new Set(),
+				intents: 0
 			} satisfies KeyState);
 		keys.set(key, state);
-		const { quota, rateLimit, detection } = defenses;
+		const { quota, rateLimit, detection, accountRateLimit, crossKeyDetection, intentDetection } =
+			defenses;
 		if (quota && state.used >= quota.requests)
 			return json(response, 429, {
 				error: { code: 'insufficient_quota', message: 'You exceeded your current quota.' }
 			});
-		if (rateLimit) {
-			const time = now();
-			if (time - state.windowStart >= rateLimit.windowMs) {
-				state.windowStart = time;
-				state.windowCount = 0;
-			}
-			if (state.windowCount >= rateLimit.requests) {
-				const retry = Math.ceil((state.windowStart + rateLimit.windowMs - time) / 1000);
-				return json(
-					response,
-					429,
-					{ error: { code: 'rate_limit_exceeded', message: 'Too many requests.' } },
-					{ 'retry-after': String(Math.max(1, retry)) }
-				);
-			}
-			state.windowCount++;
+		const time = now();
+		if (rateLimit && time - state.windowStart >= rateLimit.windowMs) {
+			state.windowStart = time;
+			state.windowCount = 0;
 		}
+		if (accountRateLimit && time - account.windowStart >= accountRateLimit.windowMs) {
+			account.windowStart = time;
+			account.windowCount = 0;
+		}
+		if (rateLimit && state.windowCount >= rateLimit.requests)
+			return tooMany(response, state.windowStart, rateLimit.windowMs);
+		if (accountRateLimit && account.windowCount >= accountRateLimit.requests)
+			return tooMany(response, account.windowStart, accountRateLimit.windowMs);
+		state.windowCount++;
+		account.windowCount++;
 		state.used++;
 		const prompt = toPrompt(body);
-		if (detection && prompt) {
+		const run = request.headers['x-agentests-run'];
+		const raise = (type: MockEvent['type'], template: string, count: number): void => {
+			events.push({
+				type,
+				key: key.slice(0, 12),
+				template,
+				count,
+				...(typeof run === 'string' ? { run } : {})
+			});
+		};
+		if (prompt) {
 			const template = toTemplate(prompt);
-			const count = (state.templates.get(template) ?? 0) + 1;
-			state.templates.set(template, count);
-			if (count >= detection.threshold && !state.flagged.has(template)) {
-				state.flagged.add(template);
-				const run = request.headers['x-agentests-run'];
-				events.push({
-					type: 'systematic-query-pattern',
-					key: key.slice(0, 12),
-					template,
-					count,
-					...(typeof run === 'string' ? { run } : {})
-				});
+			if (detection) {
+				const count = (state.templates.get(template) ?? 0) + 1;
+				state.templates.set(template, count);
+				if (count >= detection.threshold && !state.flagged.has(template)) {
+					state.flagged.add(template);
+					raise('systematic-query-pattern', template, count);
+				}
+			}
+			if (crossKeyDetection) {
+				const entry = shared.get(template) ?? { count: 0, keys: new Set(), flagged: false };
+				shared.set(template, entry);
+				entry.count++;
+				entry.keys.add(key);
+				if (
+					!entry.flagged &&
+					entry.count >= crossKeyDetection.threshold &&
+					entry.keys.size >= crossKeyDetection.keys
+				) {
+					entry.flagged = true;
+					raise('distributed-query-pattern', template, entry.count);
+				}
+			}
+			if (intentDetection && isLabelProbe(prompt)) {
+				state.intents++;
+				if (state.intents === intentDetection.threshold)
+					raise('extraction-intent', 'label with confidence', state.intents);
 			}
 		}
 		json(response, 200, { completion: `Mock answer to: ${prompt.slice(0, 80)}` });

@@ -47,6 +47,25 @@ const policyProblems = (
 			ids.add(id);
 			return duplicate ? [`tests.${index}.id: Duplicate test id`] : [];
 		}),
+		...tests.flatMap(({ baseline, expect, id }, index) => {
+			const problems: string[] = [];
+			const earlier = tests.slice(0, index).map((test) => test.id);
+			if (baseline !== undefined && !earlier.includes(baseline))
+				problems.push(
+					`tests.${index}.baseline: ${baseline === id ? 'A Test cannot be its own baseline' : `No earlier Test has id ${baseline}`}`
+				);
+			if (expect.min_blocked_rate_gain !== undefined && baseline === undefined)
+				problems.push(`tests.${index}.expect.min_blocked_rate_gain: Requires baseline`);
+			if (
+				expect.min_blocked_rate !== undefined &&
+				expect.max_blocked_rate !== undefined &&
+				expect.min_blocked_rate > expect.max_blocked_rate
+			)
+				problems.push(
+					`tests.${index}.expect.min_blocked_rate: ${expect.min_blocked_rate} is above max_blocked_rate ${expect.max_blocked_rate}`
+				);
+			return problems;
+		}),
 		...(total > safety.max_requests
 			? [
 					`safety.max_requests: The tests send ${total} requests, over the limit of ${safety.max_requests}`

@@ -77,6 +77,33 @@ npx @nyancorn/agentests-security run [id]       # exit 0 pass, 1 regression, 2 e
 npx @nyancorn/agentests-security run --json     # full report with evidence, for CI artifacts
 ```
 
+### Realistic attacks (1.2)
+
+Real extraction doesn't come from one key sending one template. Version 1.2 adds tests
+for what per-key defenses miss, and checks that normal users still get through:
+
+| Field | What it does |
+| --- | --- |
+| `scenario: legitimate-usage` | Varied, conversational questions at a human pace. Your false-positive baseline. |
+| `scenario: paraphrased-extraction` | The same boundary probe as `systematic-query-pattern`, reworded on every request, with some numbers spelled out. Template matching misses it. |
+| `keys: [ {authorization: …}, … ]` | Rotate the requests across several API keys or accounts, one header set per request. `{{key_index}}` is the index in use. |
+| `expect.min_blocked_rate: 0.5` / `max_blocked_rate: 0` | At least, or at most, this share of requests is rejected by a rate limit or quota. |
+| `baseline: <earlier test id>` with `expect.min_blocked_rate_gain: 0.3` | The attack must be blocked at least 30 points more than the baseline test. `run <id>` runs the baseline first. |
+
+[`examples/realistic.security.yaml`](examples/realistic.security.yaml) runs all of these
+against the bundled mock in about 15 seconds:
+
+```
+PASS  legitimate-baseline  blocked_rate: expected true, got true (blocked 0% of 20 requests; expected at most 0%)
+PASS  distributed-scrape  baseline_gain: expected true, got true (blocked 50% against 0% for the baseline; expected a gain of at least 30%)
+PASS  distributed-probe  detection_event: expected true, got true (1 new detection event(s) for this run)
+PASS  paraphrased-probe  detection_event: expected true, got true (1 new detection event(s) for this run)
+```
+
+The mock now also has an account-wide rate limit, cross-key detection, and intent
+detection. Start it with `--disable account-rate-limit,cross-key-detection,intent-detection`
+to see per-key defenses miss all three attacks.
+
 ### Stricter checks (1.1)
 
 | Field | What it does |

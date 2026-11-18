@@ -184,7 +184,9 @@
 						"enum": [
 							"sustained-query-volume",
 							"systematic-query-pattern",
-							"quota-exhaustion"
+							"quota-exhaustion",
+							"paraphrased-extraction",
+							"legitimate-usage"
 						]
 					},
 					"requests": {
@@ -208,6 +210,25 @@
 						"additionalProperties": {
 							"type": "string"
 						}
+					},
+					"keys": {
+						"minItems": 1,
+						"maxItems": 100,
+						"type": "array",
+						"items": {
+							"type": "object",
+							"propertyNames": {
+								"type": "string",
+								"minLength": 1
+							},
+							"additionalProperties": {
+								"type": "string"
+							}
+						}
+					},
+					"baseline": {
+						"type": "string",
+						"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
 					},
 					"max_error_rate": {
 						"default": 0.05,
@@ -236,6 +257,21 @@
 								"type": "integer",
 								"minimum": 1,
 								"maximum": 9007199254740991
+							},
+							"min_blocked_rate": {
+								"type": "number",
+								"minimum": 0,
+								"maximum": 1
+							},
+							"max_blocked_rate": {
+								"type": "number",
+								"minimum": 0,
+								"maximum": 1
+							},
+							"min_blocked_rate_gain": {
+								"type": "number",
+								"minimum": 0,
+								"maximum": 1
 							}
 						},
 						"additionalProperties": false

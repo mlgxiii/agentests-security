@@ -105,7 +105,14 @@ const validateSubcommand: Command = command({
 });
 
 /** The defense names `--disable` accepts, mapped to the mock's keys. */
-const DEFENSES = { 'rate-limit': 'rateLimit', quota: 'quota', detection: 'detection' } as const;
+const DEFENSES = {
+	'rate-limit': 'rateLimit',
+	quota: 'quota',
+	detection: 'detection',
+	'account-rate-limit': 'accountRateLimit',
+	'cross-key-detection': 'crossKeyDetection',
+	'intent-detection': 'intentDetection'
+} as const;
 
 const mockSubcommand: Command = command({
 	name: 'mock',
@@ -115,7 +122,7 @@ const mockSubcommand: Command = command({
 		{
 			name: 'disable',
 			type: 'string',
-			description: 'Comma-separated defenses to remove: rate-limit, quota, detection.'
+			description: `Comma-separated defenses to remove: ${Object.keys(DEFENSES).join(', ')}.`
 		}
 	],
 	handler: async ({ flags }): Promise<void> => {
@@ -130,7 +137,7 @@ const mockSubcommand: Command = command({
 			const defenses: MockDefenses = { ...PROTECTED_DEFENSES };
 			for (const name of names) {
 				if (!(name in DEFENSES))
-					throw new Error(`Unknown defense: ${name}; use rate-limit, quota, or detection`);
+					throw new Error(`Unknown defense: ${name}; use ${Object.keys(DEFENSES).join(', ')}`);
 				delete defenses[DEFENSES[name as keyof typeof DEFENSES]];
 			}
 			const port = typeof flags.port === 'number' ? flags.port : 4010;

@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://unpkg.com/@nyancorn/agentests-security@1/schema/policy.schema.json
+#
+# Realistic extraction tests (1.2): normal users as a baseline, an attack spread across
+# five API keys, and a probe reworded on every request. Runs against the bundled mock:
+#   npx @nyancorn/agentests-security mock
+#   npx @nyancorn/agentests-security run --policy realistic.security.yaml
+version: 1
+name: realistic-extraction
+target:
+  url: http://127.0.0.1:4010/v1/complete
+  environment: local
+  detection:
+    url: http://127.0.0.1:4010/v1/security/events
+    run_field: run # count only events tagged with this run's x-agentests-run id
+    wait_ms: 1000
+tests:
+  # Normal users must get through: nothing blocked, nothing flagged.
+  - id: legitimate-baseline
+    scenario: legitimate-usage
+    requests: 20
+    duration_seconds: 4
+    headers: { authorization: Bearer user-key }
+    expect: { max_blocked_rate: 0, detection_event: false }
+
+  # A scrape rotated across 5 keys stays under every per-key limit (20 each);
+  # only an account-wide limit stops it. It must be blocked far more than normal users.
+  - id: distributed-scrape
+    scenario: sustained-query-volume
+    requests: 100
+    keys:
+      - { authorization: Bearer scraper-1 }
+      - { authorization: Bearer scraper-2 }
+      - { authorization: Bearer scraper-3 }
+      - { authorization: Bearer scraper-4 }
+      - { authorization: Bearer scraper-5 }
+    baseline: legitimate-baseline
+    expect: { rate_limit_enforced: true, min_blocked_rate: 0.3, min_blocked_rate_gain: 0.3 }
+
+  # A boundary probe split across 5 keys: no key repeats a template 25 times,
+  # so only cross-key detection can see it.
+  - id: distributed-probe
+    scenario: systematic-query-pattern
+    requests: 60
+    duration_seconds: 6
+    keys:
+      - { authorization: Bearer prober-1 }
+      - { authorization: Bearer prober-2 }
+      - { authorization: Bearer prober-3 }
+      - { authorization: Bearer prober-4 }
+      - { authorization: Bearer prober-5 }
+    expect: { detection_event: true }
+
+  # The same probe reworded on every request: template matching misses it,
+  # intent detection must not.
+  - id: paraphrased-probe
+    scenario: paraphrased-extraction
+    requests: 30
+    duration_seconds: 3
+    headers: { authorization: Bearer rephraser }
+    expect: { detection_event: true }
+safety:
+  max_requests: 250

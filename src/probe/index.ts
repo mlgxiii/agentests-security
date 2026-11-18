@@ -33,6 +33,18 @@ const matches = ({ status, body }: AgentTestSignal, response: ProbeResponse): bo
 	status.includes(response.status) &&
 	(body === undefined || new RegExp(body, 'i').test(response.body));
 
+/** The Test with `id` and, first, its baseline chain, in policy order; empty when no Test has `id`. */
+const withBaselines = (tests: AgentTestSecurityTest[], id: string): AgentTestSecurityTest[] => {
+	const needed = new Set<string>();
+	let current = tests.find((test) => test.id === id);
+	while (current && !needed.has(current.id)) {
+		needed.add(current.id);
+		const baseline: string | undefined = current.baseline;
+		current = baseline === undefined ? undefined : tests.find((test) => test.id === baseline);
+	}
+	return tests.filter((test) => needed.has(test.id));
+};
+
 /**
  * Runs a validated security policy against its target: each Test sends its scenario one request at a time,
  * spread over `duration_seconds`, never more than `safety.max_requests` in the whole run, then judges the evidence.
@@ -77,12 +89,16 @@ export class ProbeOrchestrator {
 
 	readonly #run = async (id?: string): Promise<AgentTestSecurityReport> => {
 		const { name, target, tests } = this.#policy;
-		const selected = id === undefined ? tests : tests.filter((test) => test.id === id);
+		const selected = id === undefined ? tests : withBaselines(tests, id);
 		if (!selected.length) throw new Error(`Unknown security test: ${id}`);
 		this.#budget = this.#policy.safety.max_requests;
 		const results: AgentTestSecurityResult[] = [];
+		const blockedRates = new Map<string, number>();
 		for (const test of selected) {
 			const evidence = await this.#probe(test);
+			blockedRates.set(test.id, evidence.blockedRate);
+			if (test.baseline !== undefined)
+				evidence.baselineBlockedRate = blockedRates.get(test.baseline) ?? 0;
 			const checks = judge(test.expect, evidence);
 			const reason = inconclusive(test, evidence);
 			const result: AgentTestSecurityResult = {
@@ -130,6 +146,7 @@ export class ProbeOrchestrator {
 			: {};
 		const before = detection ? await this.#countEvents(detectionHeaders) : 0;
 		const interval = (test.duration_seconds * 1000) / test.requests;
+		const keys = test.keys ?? [{}];
 		const evidence: AgentTestSecurityEvidence = {
 			sent: 0,
 			statuses: {},
@@ -138,6 +155,8 @@ export class ProbeOrchestrator {
 			quotaRejected: 0,
 			succeededAfterQuota: 0,
 			errors: 0,
+			keys: keys.length,
+			blockedRate: 0,
 			elapsedMs: 0
 		};
 		const start = this.#now();
@@ -147,14 +166,20 @@ export class ProbeOrchestrator {
 				throw new Error(`Stopped at safety.max_requests (${this.#policy.safety.max_requests})`);
 			if (last !== undefined && interval > 0) await this.#sleep(last + interval - this.#now());
 			last = this.#now();
+			const keyIndex = index % keys.length;
 			const placeholders = {
 				prompt: scenarioPrompt(test.scenario, index),
 				index: String(index),
 				scenario: test.scenario,
-				run_id: this.#runId
+				run_id: this.#runId,
+				key_index: String(keyIndex)
 			};
 			const headers = {
-				...expandHeaders({ ...target.headers, ...test.headers }, this.#env, placeholders),
+				...expandHeaders(
+					{ ...target.headers, ...test.headers, ...keys[keyIndex] },
+					this.#env,
+					placeholders
+				),
 				[RUN_HEADER]: this.#runId,
 				[TEST_HEADER]: test.id
 			};
@@ -173,6 +198,9 @@ export class ProbeOrchestrator {
 			evidence.detectionEvents = Math.max(0, after - before);
 			evidence.detectionCorrelated = detection.run_field !== undefined;
 		}
+		evidence.blockedRate = evidence.sent
+			? (evidence.rateLimited + evidence.quotaRejected) / evidence.sent
+			: 0;
 		evidence.elapsedMs = this.#now() - start;
 		return evidence;
 	};

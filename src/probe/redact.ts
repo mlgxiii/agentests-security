@@ -65,11 +65,10 @@ export const redactText = (text: string, secrets: string[]): string =>
 		.reduce((result, secret) => result.split(secret).join(REDACTED), text)
 		.replace(/https?:\/\/[^\s"'<>]+/g, redactUrl);
 
-/** A Test as the report shows it: sensitive header values redacted unless they are only `${VAR}` references. */
-export const redactTest = (test: AgentTestSecurityTest): AgentTestSecurityTest => ({
-	...test,
-	headers: Object.fromEntries(
-		Object.entries(test.headers).map(([name, value]) => [
+/** Header values as the report shows them: sensitive ones redacted unless they are only `${VAR}` references. */
+const redactHeaders = (headers: Record<string, string>): Record<string, string> =>
+	Object.fromEntries(
+		Object.entries(headers).map(([name, value]) => [
 			name,
 			SENSITIVE.test(name) &&
 			value
@@ -79,5 +78,11 @@ export const redactTest = (test: AgentTestSecurityTest): AgentTestSecurityTest =
 				? REDACTED
 				: value
 		])
-	)
+	);
+
+/** A Test as the report shows it, with `redactHeaders` applied to its headers and key sets. */
+export const redactTest = (test: AgentTestSecurityTest): AgentTestSecurityTest => ({
+	...test,
+	headers: redactHeaders(test.headers),
+	...(test.keys ? { keys: test.keys.map(redactHeaders) } : {})
 });

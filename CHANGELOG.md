@@ -4,6 +4,37 @@ All notable changes are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com), and the project follows
 [semantic versioning](https://semver.org) as described in [STABILITY.md](STABILITY.md).
 
+## [1.2.0] - 2026-11-18
+
+Realistic attacks. Every 1.0 and 1.1 policy is still valid.
+
+### Added
+
+- **`legitimate-usage` scenario:** varied, conversational traffic, the baseline for
+  false positives.
+- **`paraphrased-extraction` scenario:** a boundary probe reworded on every request, which
+  template matching misses.
+- **`keys` per test:** rotate requests across several API keys or accounts to simulate a
+  distributed attack. `{{key_index}}` is available in headers and the body. The evidence
+  reports `keys`.
+- **Blocked-rate expectations:** `min_blocked_rate` and `max_blocked_rate`, reported as
+  the `blocked_rate` check, with `blockedRate` in the evidence.
+- **Baselines:** `baseline: <earlier test id>` with `expect.min_blocked_rate_gain`,
+  reported as the `baseline_gain` check, with `baselineBlockedRate` in the evidence.
+  `run <id>` runs the baseline first.
+- **Mock defenses:** `accountRateLimit` (50 requests a second across keys),
+  `crossKeyDetection` (one template from 3 or more keys), and `intentDetection` (asks for a
+  label with a confidence, however they are worded), all on by default. Turn them off
+  with `--disable account-rate-limit`, `cross-key-detection`, or `intent-detection`.
+- **`examples/realistic.security.yaml`:** a baseline, a distributed scrape, a distributed
+  probe, and a paraphrased probe, all passing against the mock.
+- **README:** a screenshot of the Extraction Guard demo.
+
+### Changed
+
+- **The mock raises more events:** with intent detection on, a `systematic-query-pattern`
+  run can now raise 2 events instead of 1. `detection_event: true` still passes.
+
 ## [1.1.0] - 2026-11-18
 
 Hardening of the runner. Every 1.0 policy is still valid.
