@@ -1,6 +1,6 @@
 {
 	"name": "@nyancorn/agentests-security",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Test an AI API's defenses against model extraction in CI: rate limits, quotas, and detection, as bounded, deterministic security policies.",
 	"keywords": [
 		"ai-security",
@@ -16,12 +16,12 @@
 	],
 	"license": "MIT",
 	"author": "mlgxiii",
-	"homepage": "https://github.com/mlgxiii/agentests/tree/main/examples/security#readme",
+	"homepage": "https://github.com/mlgxiii/agentests-security#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/mlgxiii/agentests.git"
+		"url": "git+https://github.com/mlgxiii/agentests-security.git"
 	},
-	"bugs": "https://github.com/mlgxiii/agentests/issues",
+	"bugs": "https://github.com/mlgxiii/agentests-security/issues",
 	"type": "module",
 	"bin": {
 		"agentests-security": "dist/cli.js"
