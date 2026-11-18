@@ -1,0 +1,42 @@
+# Frozen: every 1.x release must accept this policy unchanged. Never edit it; add a new fixture instead.
+version: 1
+name: model-extraction-protection
+target:
+  url: http://127.0.0.1:4010/v1/complete
+  environment: test
+  headers:
+    x-team: platform
+  body:
+    model: my-model
+    messages: [{ role: user, content: '{{prompt}}' }]
+    metadata: { run: '{{run_id}}', index: '{{index}}', scenario: '{{scenario}}' }
+  timeout_ms: 5000
+  signals:
+    rate_limit: { status: [429] }
+    quota: { status: [402, 403, 429], body: quota }
+  detection:
+    url: http://127.0.0.1:4010/v1/security/events
+    headers: { accept: application/json }
+    wait_ms: 1000
+tests:
+  - id: extraction-rate-limit
+    description: A burst of varied prompts from one key is throttled.
+    scenario: sustained-query-volume
+    requests: 60
+    duration_seconds: 1
+    headers: { authorization: Bearer test-key-volume }
+    expect: { rate_limit_enforced: true }
+  - id: extraction-alerting
+    scenario: systematic-query-pattern
+    requests: 40
+    duration_seconds: 4
+    expect: { rate_limit_enforced: false, detection_event: true }
+  - id: extraction-quota
+    scenario: quota-exhaustion
+    requests: 80
+    duration_seconds: 8
+    expect: { quota_enforced: true }
+safety:
+  max_requests: 200
+  allow_production: false
+  allowed_hosts: [staging.example.com]

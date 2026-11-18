@@ -1,0 +1,268 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://unpkg.com/@lastware/agentests-security@1/schema/policy.schema.json",
+	"title": "agentests-security policy, version 1",
+	"type": "object",
+	"properties": {
+		"version": {
+			"type": "number",
+			"const": 1
+		},
+		"name": {
+			"type": "string",
+			"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+		},
+		"target": {
+			"type": "object",
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri"
+				},
+				"environment": {
+					"type": "string",
+					"enum": [
+						"local",
+						"test",
+						"staging",
+						"production"
+					]
+				},
+				"headers": {
+					"default": {},
+					"type": "object",
+					"propertyNames": {
+						"type": "string",
+						"minLength": 1
+					},
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
+				"body": {
+					"default": {
+						"prompt": "{{prompt}}"
+					}
+				},
+				"timeout_ms": {
+					"default": 10000,
+					"type": "integer",
+					"minimum": 100,
+					"maximum": 60000
+				},
+				"signals": {
+					"default": {
+						"rate_limit": {
+							"status": [
+								429
+							]
+						},
+						"quota": {
+							"status": [
+								402,
+								403,
+								429
+							],
+							"body": "quota"
+						}
+					},
+					"type": "object",
+					"properties": {
+						"rate_limit": {
+							"default": {
+								"status": [
+									429
+								]
+							},
+							"type": "object",
+							"properties": {
+								"status": {
+									"minItems": 1,
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"minimum": 100,
+										"maximum": 599
+									}
+								},
+								"body": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"status"
+							],
+							"additionalProperties": false
+						},
+						"quota": {
+							"default": {
+								"status": [
+									402,
+									403,
+									429
+								],
+								"body": "quota"
+							},
+							"type": "object",
+							"properties": {
+								"status": {
+									"minItems": 1,
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"minimum": 100,
+										"maximum": 599
+									}
+								},
+								"body": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"status"
+							],
+							"additionalProperties": false
+						}
+					},
+					"additionalProperties": false
+				},
+				"detection": {
+					"type": "object",
+					"properties": {
+						"url": {
+							"type": "string",
+							"format": "uri"
+						},
+						"headers": {
+							"default": {},
+							"type": "object",
+							"propertyNames": {
+								"type": "string",
+								"minLength": 1
+							},
+							"additionalProperties": {
+								"type": "string"
+							}
+						},
+						"wait_ms": {
+							"default": 0,
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 60000
+						}
+					},
+					"required": [
+						"url"
+					],
+					"additionalProperties": false
+				}
+			},
+			"required": [
+				"url",
+				"environment"
+			],
+			"additionalProperties": false
+		},
+		"tests": {
+			"minItems": 1,
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+					},
+					"description": {
+						"type": "string"
+					},
+					"scenario": {
+						"type": "string",
+						"enum": [
+							"sustained-query-volume",
+							"systematic-query-pattern",
+							"quota-exhaustion"
+						]
+					},
+					"requests": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10000
+					},
+					"duration_seconds": {
+						"default": 0,
+						"type": "number",
+						"minimum": 0,
+						"maximum": 3600
+					},
+					"headers": {
+						"default": {},
+						"type": "object",
+						"propertyNames": {
+							"type": "string",
+							"minLength": 1
+						},
+						"additionalProperties": {
+							"type": "string"
+						}
+					},
+					"expect": {
+						"type": "object",
+						"properties": {
+							"rate_limit_enforced": {
+								"type": "boolean"
+							},
+							"quota_enforced": {
+								"type": "boolean"
+							},
+							"detection_event": {
+								"type": "boolean"
+							}
+						},
+						"additionalProperties": false
+					}
+				},
+				"required": [
+					"id",
+					"scenario",
+					"requests",
+					"expect"
+				],
+				"additionalProperties": false
+			}
+		},
+		"safety": {
+			"type": "object",
+			"properties": {
+				"max_requests": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10000
+				},
+				"allow_production": {
+					"default": false,
+					"type": "boolean"
+				},
+				"allowed_hosts": {
+					"default": [],
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			},
+			"required": [
+				"max_requests"
+			],
+			"additionalProperties": false
+		}
+	},
+	"required": [
+		"version",
+		"name",
+		"target",
+		"tests",
+		"safety"
+	],
+	"additionalProperties": false
+}
