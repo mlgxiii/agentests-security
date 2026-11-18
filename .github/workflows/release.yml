@@ -1,6 +1,6 @@
 # Publishes to npm with provenance when a version tag (v1.2.3) is pushed.
-# Authentication: an NPM_TOKEN repository secret, or npm trusted publishing
-# (configure it on npmjs.com, then delete the secret).
+# Authentication: npm trusted publishing (OIDC), configured on npmjs.com for this
+# repository, workflow release.yml, and environment npm. No npm token is stored.
 name: Release
 
 on:
@@ -37,8 +37,6 @@ jobs:
       - run: npm test
       - name: Publish
         run: npm publish --provenance --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

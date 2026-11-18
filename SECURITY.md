@@ -36,9 +36,10 @@ against mistakes; they don't make unauthorized testing acceptable.
 
 ## Supply chain
 
-Every release from 1.0.0 is published from [GitHub Actions](.github/workflows/release.yml)
-with [npm provenance](https://docs.npmjs.com/generating-provenance-statements). You can
-check that a release was built from this repository:
+Every release from 1.0.1 on is published from [GitHub Actions](.github/workflows/release.yml)
+through npm trusted publishing, with [npm provenance](https://docs.npmjs.com/generating-provenance-statements)
+and no long-lived npm token. (1.0.0 was published by hand, once, to create the package.)
+You can check that a release was built from this repository:
 
 ```sh
 npm audit signatures

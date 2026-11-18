@@ -17,7 +17,9 @@ First stable release, under its new name `@lastware/agentests-security`.
   editor at it for autocompletion and validation.
 - **Security policy:** [SECURITY.md](SECURITY.md) explains private vulnerability
   reporting, what's in scope, and authorized use.
-- **Provenance:** releases are published from GitHub Actions with npm provenance.
+- **Release workflow:** from 1.0.1 on, releases are published from GitHub Actions
+  through npm trusted publishing, with provenance. 1.0.0 itself was published by hand
+  to create the package.
 - **CI:** every push and pull request runs the type check, the tests, and a pack check
   on Node.js 22 and 24.
 
