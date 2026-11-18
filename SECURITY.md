@@ -16,7 +16,7 @@ plan within 14 days. Fixes are announced in a GitHub security advisory and the
 | Version | Supported |
 | --- | --- |
 | 1.x (latest minor) | Yes |
-| 0.x and `@nyancorn/agentests-security` | No. Upgrade to `@lastware/agentests-security`. |
+| 0.x | No. Upgrade to 1.x. |
 
 ## In scope
 
@@ -36,9 +36,9 @@ against mistakes; they don't make unauthorized testing acceptable.
 
 ## Supply chain
 
-Every release from 1.0.1 on is published from [GitHub Actions](.github/workflows/release.yml)
+Every release from 1.0.0 on is published from [GitHub Actions](.github/workflows/release.yml)
 through npm trusted publishing, with [npm provenance](https://docs.npmjs.com/generating-provenance-statements)
-and no long-lived npm token. (1.0.0 was published by hand, once, to create the package.)
+and no long-lived npm token. (The 0.x releases were published by hand.)
 You can check that a release was built from this repository:
 
 ```sh

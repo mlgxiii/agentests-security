@@ -30,12 +30,22 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.4'
+      - name: npm with trusted publishing support (11.5.1 or later)
+        run: npm install -g npm@11
       - run: npm ci --ignore-scripts
       - name: The tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: npm run check
       - run: npm test
+      - name: Skip a version already on npm
+        id: published
+        run: |
+          if npm view "$(node -p "require('./package.json').name")@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${GITHUB_REF_NAME} is already on npm; skipping the publish."
+          fi
       - name: Publish
+        if: steps.published.outputs.already != 'true'
         run: npm publish --provenance --access public --ignore-scripts
       - name: GitHub release
         env:

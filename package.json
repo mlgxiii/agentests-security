@@ -1,5 +1,5 @@
 {
-	"name": "@lastware/agentests-security",
+	"name": "@nyancorn/agentests-security",
 	"version": "1.0.0",
 	"description": "Test an AI API's defenses against model extraction in CI: rate limits, quotas, and detection, as bounded, deterministic security policies.",
 	"keywords": [
@@ -15,7 +15,7 @@
 		"agentests"
 	],
 	"license": "MIT",
-	"author": "lastware",
+	"author": "mlgxiii",
 	"homepage": "https://github.com/mlgxiii/agentests-security#readme",
 	"repository": {
 		"type": "git",

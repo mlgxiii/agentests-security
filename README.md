@@ -1,6 +1,6 @@
 # agentests-security
 
-[![npm](https://img.shields.io/npm/v/@lastware/agentests-security?logo=npm)](https://www.npmjs.com/package/@lastware/agentests-security)
+[![npm](https://img.shields.io/npm/v/@nyancorn/agentests-security?logo=npm)](https://www.npmjs.com/package/@nyancorn/agentests-security)
 [![CI](https://github.com/mlgxiii/agentests-security/actions/workflows/ci.yml/badge.svg)](https://github.com/mlgxiii/agentests-security/actions/workflows/ci.yml)
 [![provenance](https://img.shields.io/badge/npm-provenance-blue)](SECURITY.md#supply-chain)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -25,11 +25,11 @@ It needs no model or API key. Requires Node.js 22+.
 
 ```sh
 # 1. A local mock AI API with every defense switched on
-npx @lastware/agentests-security mock
+npx @nyancorn/agentests-security mock
 
 # 2. In another terminal: fetch the example policy and run it (about 13 seconds)
 curl -O https://raw.githubusercontent.com/mlgxiii/agentests/main/examples/security/agentests.security.yaml
-npx @lastware/agentests-security run
+npx @nyancorn/agentests-security run
 ```
 
 Restart the mock with `--disable rate-limit`, `quota`, or `detection`, then run the
@@ -40,7 +40,7 @@ policy again to see that defense's test fail.
 Write `agentests.security.yaml`. The first line turns on autocompletion and validation in editors that use the YAML language server, such as VS Code with the YAML extension:
 
 ```yaml
-# yaml-language-server: $schema=https://unpkg.com/@lastware/agentests-security@1/schema/policy.schema.json
+# yaml-language-server: $schema=https://unpkg.com/@nyancorn/agentests-security@1/schema/policy.schema.json
 version: 1
 name: model-extraction-protection
 target:
@@ -63,9 +63,9 @@ safety:
 ```
 
 ```sh
-npx @lastware/agentests-security validate       # check the policy without sending anything
-npx @lastware/agentests-security run [id]       # exit 0 pass, 1 regression, 2 error
-npx @lastware/agentests-security run --json     # full report with evidence, for CI artifacts
+npx @nyancorn/agentests-security validate       # check the policy without sending anything
+npx @nyancorn/agentests-security run [id]       # exit 0 pass, 1 regression, 2 error
+npx @nyancorn/agentests-security run --json     # full report with evidence, for CI artifacts
 ```
 
 The [policy reference](https://github.com/mlgxiii/agentests/tree/main/examples/security#the-policy)
@@ -97,13 +97,10 @@ announces every change.
 Releases are published from GitHub Actions with npm provenance. Report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md).
 
-**Coming from `@nyancorn/agentests-security`?** Replace the package name; nothing else
-changes.
-
 ## Library
 
 ```ts
-import { parseSecurityPolicy, ProbeOrchestrator } from '@lastware/agentests-security';
+import { parseSecurityPolicy, ProbeOrchestrator } from '@nyancorn/agentests-security';
 
 const report = await new ProbeOrchestrator(parseSecurityPolicy(yamlText), process.env).run();
 ```

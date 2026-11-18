@@ -1,6 +1,6 @@
 # Stability
 
-`@lastware/agentests-security` follows [semantic versioning](https://semver.org).
+`@nyancorn/agentests-security` follows [semantic versioning](https://semver.org).
 From 1.0.0, everything below is a public contract. It changes in a breaking way only
 in a new major version, announced in the [changelog](CHANGELOG.md) at least one minor
 release ahead, with a deprecation warning wherever one is possible.
@@ -10,7 +10,7 @@ release ahead, with a deprecation warning wherever one is possible.
 | Surface | Promise |
 | --- | --- |
 | Policy file, `version: 1` | Every policy valid on 1.0 stays valid and keeps its meaning on every 1.x release. New optional fields may be added. A breaking format change would introduce `version: 2`, and 1.x would keep reading `version: 1`. |
-| [`schema/policy.schema.json`](schema/policy.schema.json) | Matches the format above, and is published at `https://unpkg.com/@lastware/agentests-security@1/schema/policy.schema.json`. |
+| [`schema/policy.schema.json`](schema/policy.schema.json) | Matches the format above, and is published at `https://unpkg.com/@nyancorn/agentests-security@1/schema/policy.schema.json`. |
 | CLI | The commands `run`, `validate`, and `mock`, their flags, and the exit codes: 0 means every test passed, 1 means a regression, 2 means an error (an invalid policy, or an unreachable or unauthorized target). |
 | `run --json` report | Existing fields keep their names, types, and meanings. New fields may be added. |
 | Request headers | `x-agentests-run` and `x-agentests-test` are sent on every request. |
