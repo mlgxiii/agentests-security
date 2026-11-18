@@ -20,11 +20,11 @@ It needs no model or API key. Requires Node.js 22+.
 
 ```sh
 # 1. A local mock AI API with every defense switched on
-npx @mlgxiii/agentests-security mock
+npx @nyancorn/agentests-security mock
 
 # 2. In another terminal: fetch the example policy and run it (about 13 seconds)
 curl -O https://raw.githubusercontent.com/mlgxiii/agentests/main/examples/security/agentests.security.yaml
-npx @mlgxiii/agentests-security run
+npx @nyancorn/agentests-security run
 ```
 
 Restart the mock with `--disable rate-limit`, `quota`, or `detection`, then run the
@@ -57,9 +57,9 @@ safety:
 ```
 
 ```sh
-npx @mlgxiii/agentests-security validate       # check the policy without sending anything
-npx @mlgxiii/agentests-security run [id]       # exit 0 pass, 1 regression, 2 error
-npx @mlgxiii/agentests-security run --json     # full report with evidence, for CI artifacts
+npx @nyancorn/agentests-security validate       # check the policy without sending anything
+npx @nyancorn/agentests-security run [id]       # exit 0 pass, 1 regression, 2 error
+npx @nyancorn/agentests-security run --json     # full report with evidence, for CI artifacts
 ```
 
 The [policy reference](https://github.com/mlgxiii/agentests/tree/main/examples/security#the-policy)
@@ -84,7 +84,7 @@ Only test APIs you own or are authorized to test.
 ## Library
 
 ```ts
-import { parseSecurityPolicy, ProbeOrchestrator } from '@mlgxiii/agentests-security';
+import { parseSecurityPolicy, ProbeOrchestrator } from '@nyancorn/agentests-security';
 
 const report = await new ProbeOrchestrator(parseSecurityPolicy(yamlText), process.env).run();
 ```
