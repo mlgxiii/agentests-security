@@ -35,7 +35,9 @@ export const DetectionSchema = z.strictObject({
 	url: z.url({ protocol: /^https?$/ }),
 	headers: HeadersSchema.default({}),
 	/** How long to keep polling for a new event after the scenario ends. */
-	wait_ms: z.number().int().min(0).max(60_000).default(0)
+	wait_ms: z.number().int().min(0).max(60_000).default(0),
+	/** The event field holding the run id the API saw in `x-agentests-run`; when set, only this run's events count. */
+	run_field: TextSchema.optional()
 });
 export type AgentTestDetection = z.infer<typeof DetectionSchema>;
 
@@ -54,16 +56,26 @@ export const TargetSchema = z.strictObject({
 });
 export type AgentTestTarget = z.infer<typeof TargetSchema>;
 
-/** What a security Test expects of the defenses; at least one field. */
+/** What a security Test expects of the defenses; at least one of the three expectations. */
 export const ExpectSchema = z
 	.strictObject({
 		rate_limit_enforced: z.boolean().optional(),
 		quota_enforced: z.boolean().optional(),
-		detection_event: z.boolean().optional()
+		detection_event: z.boolean().optional(),
+		/** With `rate_limit_enforced: true`: the first rate-limited response must come by this request. */
+		rate_limit_within: z.number().int().min(1).optional(),
+		/** With `quota_enforced: true`: the first quota response must come by this request. */
+		quota_within: z.number().int().min(1).optional()
 	})
-	.refine((value) => Object.keys(value).length > 0, 'Expected at least one expectation');
+	.refine(
+		(value) =>
+			value.rate_limit_enforced !== undefined ||
+			value.quota_enforced !== undefined ||
+			value.detection_event !== undefined,
+		'Expected at least one expectation'
+	);
 export type AgentTestExpect = z.infer<typeof ExpectSchema>;
-export type AgentTestExpectation = keyof AgentTestExpect;
+export type AgentTestExpectation = 'rate_limit_enforced' | 'quota_enforced' | 'detection_event';
 
 /** One bounded attack simulation and its expectations; `duration_seconds` spreads the requests evenly, 0 sends them back to back. */
 export const SecurityTestSchema = z.strictObject({
@@ -74,6 +86,8 @@ export const SecurityTestSchema = z.strictObject({
 	duration_seconds: z.number().min(0).max(3_600).default(0),
 	/** Merged over the target's headers for this Test only, e.g. its own API key. */
 	headers: HeadersSchema.default({}),
+	/** The largest share of responses that may be errors matching no signal before the Test is inconclusive, and fails. */
+	max_error_rate: z.number().min(0).max(1).default(0.05),
 	expect: ExpectSchema
 });
 export type AgentTestSecurityTest = z.infer<typeof SecurityTestSchema>;
@@ -82,7 +96,9 @@ export type AgentTestSecurityTest = z.infer<typeof SecurityTestSchema>;
 export const SafetySchema = z.strictObject({
 	max_requests: z.number().int().min(1).max(10_000),
 	allow_production: z.boolean().default(false),
-	allowed_hosts: z.array(TextSchema).default([])
+	allowed_hosts: z.array(TextSchema).default([]),
+	/** Accept plain `http://` to a non-local host. Without it, such a URL is a warning in 1.x and an error from 2.0. */
+	allow_insecure_http: z.boolean().default(false)
 });
 export type AgentTestSafety = z.infer<typeof SafetySchema>;
 
@@ -108,8 +124,12 @@ export interface AgentTestSecurityEvidence {
 	firstQuota?: number;
 	/** Successful responses after the first quota response: a quota that lets traffic through again is not enforced. */
 	succeededAfterQuota: number;
+	/** Non-2xx responses that match no signal, such as 500s: evidence about the target, not its defenses. */
+	errors: number;
 	/** New detection events seen during the scenario; absent without `target.detection`. */
 	detectionEvents?: number;
+	/** Whether `detectionEvents` counts only this run's events (`target.detection.run_field`); absent without detection. */
+	detectionCorrelated?: boolean;
 	elapsedMs: number;
 }
 
@@ -117,6 +137,8 @@ export interface AgentTestSecurityEvidence {
 export interface AgentTestSecurityResult {
 	test: AgentTestSecurityTest;
 	passed: boolean;
+	/** Why the evidence cannot be trusted, such as too many errors; set only then, and the Test fails. */
+	inconclusive?: string;
 	checks: AgentTestSecurityCheck[];
 	evidence: AgentTestSecurityEvidence;
 }
@@ -129,4 +151,6 @@ export interface AgentTestSecurityReport {
 	passed: number;
 	total: number;
 	results: AgentTestSecurityResult[];
+	/** Policy problems that are not errors yet, such as plain HTTP to a remote host. */
+	warnings: string[];
 }

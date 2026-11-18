@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentTestSecurityPolicy } from '../policy/types.ts';
-import { countEvents, expandHeaders, expandValue, send } from './http.ts';
+import { expandHeaders, expandValue, readEvents, send } from './http.ts';
 import type { ProbeResponse } from './http.ts';
 import { scenarioPrompt } from './scenarios.ts';
 import type {
@@ -10,8 +10,10 @@ import type {
 	AgentTestSecurityTest,
 	AgentTestSignal
 } from './types.ts';
-import { sleep } from './utils.ts';
-import { judge } from './verdict.ts';
+import { policySecrets, redactTest, redactText, redactUrl } from './redact.ts';
+import { message, sleep } from './utils.ts';
+import { securityPolicyWarnings } from '../policy/validate.ts';
+import { inconclusive, judge } from './verdict.ts';
 
 /** Seams for tests and callers: the HTTP client, the clock, and a callback after each Test. */
 export interface ProbeOptions {
@@ -60,8 +62,20 @@ export class ProbeOrchestrator {
 		this.#onResult = options.onResult;
 	}
 
-	/** Run every Test in policy order, or only the one with `id`; throws on an unknown id or an unreachable target. */
+	/**
+	 * Run every Test in policy order, or only the one with `id`; throws on an unknown id or an unreachable target.
+	 * Secrets the policy sends never appear in the report or in a thrown message.
+	 */
 	readonly run = async (id?: string): Promise<AgentTestSecurityReport> => {
+		const secrets = policySecrets(this.#policy, this.#env);
+		try {
+			return await this.#run(id);
+		} catch (error) {
+			throw new Error(redactText(message(error), secrets));
+		}
+	};
+
+	readonly #run = async (id?: string): Promise<AgentTestSecurityReport> => {
 		const { name, target, tests } = this.#policy;
 		const selected = id === undefined ? tests : tests.filter((test) => test.id === id);
 		if (!selected.length) throw new Error(`Unknown security test: ${id}`);
@@ -70,28 +84,51 @@ export class ProbeOrchestrator {
 		for (const test of selected) {
 			const evidence = await this.#probe(test);
 			const checks = judge(test.expect, evidence);
-			const result = { test, passed: checks.every((check) => check.passed), checks, evidence };
+			const reason = inconclusive(test, evidence);
+			const result: AgentTestSecurityResult = {
+				test: redactTest(test),
+				passed: reason === undefined && checks.every((check) => check.passed),
+				...(reason === undefined ? {} : { inconclusive: reason }),
+				checks,
+				evidence
+			};
 			results.push(result);
 			this.#onResult?.(result);
 		}
 		return {
 			policy: name,
 			runId: this.#runId,
-			target: { url: target.url, environment: target.environment },
+			target: { url: redactUrl(target.url), environment: target.environment },
 			passed: results.filter((result) => result.passed).length,
 			total: results.length,
-			results
+			results,
+			warnings: securityPolicyWarnings(this.#policy)
 		};
+	};
+
+	/** This run's share of the detection events: all of them, or with `run_field` only those carrying this run's id. */
+	readonly #countEvents = async (headers: Record<string, string>): Promise<number> => {
+		const { detection, timeout_ms } = this.#policy.target;
+		if (!detection) return 0;
+		const events = await readEvents(this.#fetch, detection.url, headers, timeout_ms);
+		const field = detection.run_field;
+		if (field === undefined) return events.length;
+		return events.filter(
+			(event) =>
+				!!event &&
+				typeof event === 'object' &&
+				String((event as Record<string, unknown>)[field]) === this.#runId
+		).length;
 	};
 
 	/** Send one Test's scenario and collect its evidence. */
 	readonly #probe = async (test: AgentTestSecurityTest): Promise<AgentTestSecurityEvidence> => {
 		const { target } = this.#policy;
 		const detection = test.expect.detection_event !== undefined ? target.detection : undefined;
-		const detectionHeaders = detection ? expandHeaders(detection.headers, this.#env) : {};
-		const before = detection
-			? await countEvents(this.#fetch, detection.url, detectionHeaders, target.timeout_ms)
-			: 0;
+		const detectionHeaders = detection
+			? expandHeaders(detection.headers, this.#env, { run_id: this.#runId })
+			: {};
+		const before = detection ? await this.#countEvents(detectionHeaders) : 0;
 		const interval = (test.duration_seconds * 1000) / test.requests;
 		const evidence: AgentTestSecurityEvidence = {
 			sent: 0,
@@ -100,6 +137,7 @@ export class ProbeOrchestrator {
 			rateLimited: 0,
 			quotaRejected: 0,
 			succeededAfterQuota: 0,
+			errors: 0,
 			elapsedMs: 0
 		};
 		const start = this.#now();
@@ -127,17 +165,13 @@ export class ProbeOrchestrator {
 		}
 		if (detection) {
 			const deadline = this.#now() + detection.wait_ms;
-			let after = await countEvents(
-				this.#fetch,
-				detection.url,
-				detectionHeaders,
-				target.timeout_ms
-			);
+			let after = await this.#countEvents(detectionHeaders);
 			while (after <= before && this.#now() < deadline) {
 				await this.#sleep(Math.min(250, deadline - this.#now()));
-				after = await countEvents(this.#fetch, detection.url, detectionHeaders, target.timeout_ms);
+				after = await this.#countEvents(detectionHeaders);
 			}
 			evidence.detectionEvents = Math.max(0, after - before);
+			evidence.detectionCorrelated = detection.run_field !== undefined;
 		}
 		evidence.elapsedMs = this.#now() - start;
 		return evidence;
@@ -157,6 +191,6 @@ export class ProbeOrchestrator {
 		} else if (response.status >= 200 && response.status < 300) {
 			evidence.succeeded++;
 			if (evidence.firstQuota !== undefined) evidence.succeededAfterQuota++;
-		}
+		} else evidence.errors++;
 	};
 }

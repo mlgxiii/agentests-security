@@ -22,10 +22,12 @@ describe('validateSecurityPolicy', () => {
 		expect(policy.target.signals.rate_limit).toEqual({ status: [429] });
 		expect(policy.target.signals.quota).toEqual({ status: [402, 403, 429], body: 'quota' });
 		expect(policy.tests[0]!.duration_seconds).toBe(0);
+		expect(policy.tests[0]!.max_error_rate).toBe(0.05);
 		expect(policy.safety).toEqual({
 			max_requests: 100,
 			allow_production: false,
-			allowed_hosts: []
+			allowed_hosts: [],
+			allow_insecure_http: false
 		});
 	});
 

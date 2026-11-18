@@ -6,10 +6,13 @@ import { PROTECTED_DEFENSES, startMockApi } from './mock.ts';
 import type { MockDefenses } from './mock.ts';
 import { ProbeOrchestrator } from './probe/index.ts';
 import type { AgentTestSecurityResult } from './probe/types.ts';
-
+import { redactUrl } from './probe/redact.ts';
+import { securityPolicyWarnings } from './policy/validate.ts';
+import type { AgentTestSecurityPolicy } from './policy/types.ts';
 
 /** The text of a thrown value. */
-const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const message = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error);
 
 const policyFlag = {
 	name: 'policy',
@@ -20,12 +23,19 @@ const policyFlag = {
 /** The policy path a flag value names, else the default. */
 const toPath = (value: unknown): string => (typeof value === 'string' ? value : SECURITY_PATH);
 
-/** `PASS|FAIL  <test>  <expectation>: expected <x>, got <y> (<detail>)`, one line per check. */
-const toLines = ({ test, checks }: AgentTestSecurityResult): string[] =>
-	checks.map(
+/** `PASS|FAIL  <test>  <expectation>: expected <x>, got <y> (<detail>)`, one line per check, then a FAIL line if inconclusive. */
+const toLines = ({ test, checks, inconclusive }: AgentTestSecurityResult): string[] => [
+	...checks.map(
 		(check) =>
 			`${check.passed ? 'PASS' : 'FAIL'}  ${test.id}  ${check.expectation}: expected ${check.expected}, got ${check.actual} (${check.detail})`
-	);
+	),
+	...(inconclusive === undefined ? [] : [`FAIL  ${test.id}  inconclusive: ${inconclusive}`])
+];
+
+/** Print each policy warning to stderr, so `--json` output stays parseable. */
+const warn = (policy: AgentTestSecurityPolicy): void => {
+	for (const warning of securityPolicyWarnings(policy)) console.error(`Warning: ${warning}`);
+};
 
 const runSubcommand: Command = command({
 	name: 'run',
@@ -46,9 +56,10 @@ const runSubcommand: Command = command({
 				allowProduction: flags['allow-production'] === true
 			});
 			const asJson = flags.json === true;
+			warn(policy);
 			if (!asJson)
 				console.log(
-					`Security evaluation: ${policy.name} → ${policy.target.url} (${policy.target.environment})`
+					`Security evaluation: ${policy.name} → ${redactUrl(policy.target.url)} (${policy.target.environment})`
 				);
 			const report = await new ProbeOrchestrator(policy, process.env, {
 				onResult: (result) => {
@@ -82,6 +93,7 @@ const validateSubcommand: Command = command({
 				allowProduction: flags['allow-production'] === true
 			});
 			const total = policy.tests.reduce((sum, test) => sum + test.requests, 0);
+			warn(policy);
 			console.log(
 				`Policy ${policy.name} valid: ${policy.tests.length} security test(s), ${total} of ${policy.safety.max_requests} request(s).`
 			);

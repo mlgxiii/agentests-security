@@ -1,6 +1,6 @@
 {
 	"name": "@nyancorn/agentests-security",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Test an AI API's defenses against model extraction in CI: rate limits, quotas, and detection, as bounded, deterministic security policies.",
 	"keywords": [
 		"ai-security",

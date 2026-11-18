@@ -149,6 +149,9 @@
 							"type": "integer",
 							"minimum": 0,
 							"maximum": 60000
+						},
+						"run_field": {
+							"type": "string"
 						}
 					},
 					"required": [
@@ -206,6 +209,12 @@
 							"type": "string"
 						}
 					},
+					"max_error_rate": {
+						"default": 0.05,
+						"type": "number",
+						"minimum": 0,
+						"maximum": 1
+					},
 					"expect": {
 						"type": "object",
 						"properties": {
@@ -217,6 +226,16 @@
 							},
 							"detection_event": {
 								"type": "boolean"
+							},
+							"rate_limit_within": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 9007199254740991
+							},
+							"quota_within": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 9007199254740991
 							}
 						},
 						"additionalProperties": false
@@ -249,6 +268,10 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"allow_insecure_http": {
+					"default": false,
+					"type": "boolean"
 				}
 			},
 			"required": [

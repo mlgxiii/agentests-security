@@ -63,6 +63,24 @@ const policyProblems = (
 				? [`tests.${index}.expect.detection_event: Requires target.detection`]
 				: []
 		),
+		...tests.flatMap(({ expect, requests }, index) =>
+			(
+				[
+					['rate_limit_within', 'rate_limit_enforced'],
+					['quota_within', 'quota_enforced']
+				] as const
+			).flatMap(([within, enforced]) => {
+				const limit = expect[within];
+				if (limit === undefined) return [];
+				if (expect[enforced] !== true)
+					return [`tests.${index}.expect.${within}: Requires ${enforced}: true`];
+				return limit > requests
+					? [
+							`tests.${index}.expect.${within}: ${limit} is more than the Test's ${requests} requests`
+						]
+					: [];
+			})
+		),
 		...urls.flatMap(([path, value]) => {
 			const url = new URL(value);
 			if (url.username || url.password)
@@ -78,6 +96,29 @@ const policyProblems = (
 			? ['target.environment: Production targets need the --allow-production flag']
 			: [])
 	];
+};
+
+/**
+ * Problems that are not errors in 1.x but will be in 2.0: a plain `http://` URL to a host outside `LOCAL_HOSTS`,
+ * which sends the API key unencrypted, unless `safety.allow_insecure_http` accepts it.
+ */
+export const securityPolicyWarnings = (policy: AgentTestSecurityPolicy): string[] => {
+	const { target, safety } = policy;
+	if (safety.allow_insecure_http) return [];
+	const urls: [string, string][] = [
+		['target.url', target.url],
+		...(target.detection
+			? [['target.detection.url', target.detection.url] as [string, string]]
+			: [])
+	];
+	return urls.flatMap(([path, value]) => {
+		const url = new URL(value);
+		return url.protocol === 'http:' && !LOCAL_HOSTS.includes(url.hostname.toLowerCase())
+			? [
+					`${path}: Plain HTTP to ${url.hostname} sends credentials unencrypted; use https, or set safety.allow_insecure_http: true. This becomes an error in 2.0.`
+				]
+			: [];
+	});
 };
 
 const compiles = (pattern: string): boolean => {

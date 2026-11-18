@@ -1,4 +1,5 @@
 import type {
+	AgentTestSecurityTest,
 	AgentTestExpect,
 	AgentTestExpectation,
 	AgentTestSecurityCheck,
@@ -8,20 +9,33 @@ import type {
 /** What the evidence shows for one expectation, and the sentence explaining it. */
 const observe = (
 	expectation: AgentTestExpectation,
-	evidence: AgentTestSecurityEvidence
+	evidence: AgentTestSecurityEvidence,
+	within?: number
 ): { actual: boolean; detail: string } => {
 	const { sent } = evidence;
 	switch (expectation) {
-		case 'rate_limit_enforced':
-			return evidence.firstRateLimit === undefined
-				? { actual: false, detail: `no rate-limited response in ${sent} requests` }
-				: {
-						actual: true,
-						detail: `first rate-limited at request ${evidence.firstRateLimit} of ${sent}; ${evidence.rateLimited} rejected`
-					};
+		case 'rate_limit_enforced': {
+			const first = evidence.firstRateLimit;
+			if (first === undefined)
+				return { actual: false, detail: `no rate-limited response in ${sent} requests` };
+			if (within !== undefined && first > within)
+				return {
+					actual: false,
+					detail: `first rate-limited at request ${first}, after the limit of ${within}`
+				};
+			return {
+				actual: true,
+				detail: `first rate-limited at request ${first} of ${sent}; ${evidence.rateLimited} rejected`
+			};
+		}
 		case 'quota_enforced':
 			if (evidence.firstQuota === undefined)
 				return { actual: false, detail: `no quota response in ${sent} requests` };
+			if (within !== undefined && evidence.firstQuota > within)
+				return {
+					actual: false,
+					detail: `quota hit at request ${evidence.firstQuota}, after the limit of ${within}`
+				};
 			if (evidence.succeededAfterQuota > 0)
 				return {
 					actual: false,
@@ -33,7 +47,8 @@ const observe = (
 			};
 		case 'detection_event': {
 			const events = evidence.detectionEvents ?? 0;
-			return { actual: events > 0, detail: `${events} new detection event(s)` };
+			const scope = evidence.detectionCorrelated ? ' for this run' : '';
+			return { actual: events > 0, detail: `${events} new detection event(s)${scope}` };
 		}
 	}
 };
@@ -46,6 +61,25 @@ export const judge = (
 	(['rate_limit_enforced', 'quota_enforced', 'detection_event'] as const).flatMap((expectation) => {
 		const expected = expect[expectation];
 		if (expected === undefined) return [];
-		const { actual, detail } = observe(expectation, evidence);
+		const within =
+			expectation === 'rate_limit_enforced'
+				? expect.rate_limit_within
+				: expectation === 'quota_enforced'
+					? expect.quota_within
+					: undefined;
+		const { actual, detail } = observe(expectation, evidence, within);
 		return [{ expectation, expected, actual, passed: actual === expected, detail }];
 	});
+
+/** Why a Test's evidence says more about the target's errors than its defenses, or undefined when it is sound. */
+export const inconclusive = (
+	{ max_error_rate }: AgentTestSecurityTest,
+	{ sent, errors, statuses }: AgentTestSecurityEvidence
+): string | undefined => {
+	if (!sent || errors / sent <= max_error_rate) return undefined;
+	const codes = Object.entries(statuses)
+		.filter(([status]) => !/^2/.test(status))
+		.map(([status, count]) => `${status}×${count}`)
+		.join(', ');
+	return `${errors} of ${sent} responses were errors matching no signal (non-2xx: ${codes}), over max_error_rate ${max_error_rate}`;
+};

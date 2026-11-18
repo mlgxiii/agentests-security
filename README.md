@@ -68,6 +68,15 @@ npx @nyancorn/agentests-security run [id]       # exit 0 pass, 1 regression, 2 e
 npx @nyancorn/agentests-security run --json     # full report with evidence, for CI artifacts
 ```
 
+### Stricter checks (1.1)
+
+| Field | What it does |
+| --- | --- |
+| `expect.rate_limit_within: 25` | The rate limit must fire by request 25, not just eventually. Needs `rate_limit_enforced: true`. |
+| `expect.quota_within: 60` | The same for the quota. Needs `quota_enforced: true`. |
+| `max_error_rate: 0.05` (per test, default) | If more than 5% of responses are errors that match no signal, such as 500s, the test fails as **inconclusive**. A broken API no longer passes `rate_limit_enforced: false`. |
+| `target.detection.run_field: run` | Count only detection events whose `run` field equals this run's `x-agentests-run` id. Without it, any new event counts, even one caused by other traffic. Detection headers can also use `{{run_id}}`, for APIs that filter on the server side. |
+
 The [policy reference](https://github.com/mlgxiii/agentests/tree/main/examples/security#the-policy)
 covers every field: the three scenarios, the response signals, the detection
 endpoint, and the safety limits.
@@ -82,6 +91,14 @@ endpoint, and the safety limits.
   as a hard stop during the run.
 - **Credentials:** URLs that contain credentials are rejected. Put secrets in headers as
   `${VAR}` references instead.
+- **TLS:** plain `http://` to a host other than localhost prints a warning, because it sends
+  your API key unencrypted. From 2.0 it will be an error. Set `safety.allow_insecure_http: true`
+  to accept it, for example on a private network.
+- **Redaction:** the values of `${VAR}` secrets, literal values of headers such as
+  `authorization` or `x-api-key`, and URL parameters such as `api_key` or `token` are replaced
+  with `[REDACTED]` in the report and in error messages.
+- **Bounded responses:** at most 64 KiB of each response is read, and the rest of a streaming
+  answer is cancelled. A detection endpoint returning more than 4 MiB is an error.
 - **Traceability:** every request carries `x-agentests-run` and `x-agentests-test` headers,
   so your logs can tell test traffic apart.
 

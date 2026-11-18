@@ -1,4 +1,4 @@
-export { LOCAL_HOSTS, validateSecurityPolicy } from './policy/validate.ts';
+export { LOCAL_HOSTS, securityPolicyWarnings, validateSecurityPolicy } from './policy/validate.ts';
 export type { AgentTestSecurityOptions } from './policy/validate.ts';
 export { parseSecurityPolicy } from './policy/parse.ts';
 export { loadSecurityPolicy, SECURITY_PATH } from './policy/load.ts';
