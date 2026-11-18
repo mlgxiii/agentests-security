@@ -35,6 +35,15 @@ npx @nyancorn/agentests-security run
 Restart the mock with `--disable rate-limit`, `quota`, or `detection`, then run the
 policy again to see that defense's test fail.
 
+## See it in a pull request
+
+[![Extraction Guard: a pull request removes the rate limit, the security check fails, and merging is blocked](https://raw.githubusercontent.com/mlgxiii/agentests-security/main/docs/extraction-guard.jpg)](https://github.com/mlgxiii/agentests/tree/main/examples/security/extraction-guard)
+
+[Extraction Guard](https://github.com/mlgxiii/agentests/tree/main/examples/security/extraction-guard)
+is a demo app. A pull request removes the API's rate limit, the security policy catches
+it, and merging is blocked. Nothing is faked: each run starts a fresh mock API and runs
+the real runner against it, streaming every request and response to the page.
+
 ## Point it at your API
 
 Write `agentests.security.yaml`. The first line turns on autocompletion and validation in editors that use the YAML language server, such as VS Code with the YAML extension:
